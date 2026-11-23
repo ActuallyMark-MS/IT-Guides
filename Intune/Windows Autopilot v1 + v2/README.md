@@ -200,16 +200,16 @@ Now create the v2 policy:
 
 Standard unassociated v2 deployments do not apply the built-in naming template during OOBE. Rename the PC **after** Intune enrollment using a Platform script.
 
-1. Save the following script as **Rename-Customer-Serial.ps1**. The example uses `VID-PC` for the customer name/prefix; replace it with the actual customer-specific value.
+1. Save the following script as **Rename-Customer-Serial.ps1**. The script uses `CUSTOMER_PREFIX-PC` as a placeholder; replace `CUSTOMER_PREFIX` with the actual short customer code before deployment.
 
 ~~~powershell
 # Predefined variables for naming standard for CUSTOMER_NAME
-$CUSTOMER_NAME = "VID-PC"
+$CUSTOMER_NAME = "CUSTOMER_PREFIX-PC"
 
 # Get the device serial number
 $Serial = (Get-CimInstance Win32_BIOS).SerialNumber.Trim()
 
-# Change name to VID-PC Serial number
+# Change name to CUSTOMER_PREFIX-PC Serial number
 $NewName = "$CUSTOMER_NAME-$Serial"
 $NewName = $NewName.Substring(0, [Math]::Min(15, $NewName.Length))
 
@@ -229,7 +229,7 @@ if ($env:COMPUTERNAME -ne $NewName) {
 
 **No forced restart:** `Rename-Computer -Force` suppresses confirmation; the script does not call `Restart-Computer`. The changed name takes full effect on the next normal restart.
 
-**Naming length:** Windows computer names should stay within 15 characters for compatibility. Truncation can produce duplicates (especially for long serial numbers), so check real device prefixes and serial lengths. The example `VID-PC` is illustrative; confirm it fits your devices.
+**Naming length:** Windows computer names should stay within 15 characters for compatibility. Truncation can produce duplicates (especially for long serial numbers), so check real device prefixes and serial lengths. `CUSTOMER_PREFIX-PC` is a placeholder, not a literal Windows computer name; substitute a short prefix before deployment.
 
 ### Step 9 — Automatically register v2-enrolled PCs in classic Autopilot
 
@@ -377,7 +377,7 @@ Both DK and international classic Autopilot profiles use the same **customer-spe
 CUSTOMER-PREFIX-%SERIAL%
 ```
 
-**For example:** `VID-PC-%SERIAL%` creates `VID-PC-PF61TZZW` when the serial is `PF61TZZW`. Confirm the result fits the 15-character limit.
+**Template example:** `CUSTOMER_PREFIX-PC-%SERIAL%` is a placeholder. Replace `CUSTOMER_PREFIX` with a short customer code; the resulting device name must fit the 15-character limit.
 
 ### Unassociated v2 fallback naming
 
@@ -385,12 +385,12 @@ The built-in v2 naming template applies during OOBE only when device association
 
 ```powershell
 # Predefined variables for naming standard for CUSTOMER_NAME
-$CUSTOMER_NAME = "VID-PC"
+$CUSTOMER_NAME = "CUSTOMER_PREFIX-PC"
 
 # Get the device serial number
 $Serial = (Get-CimInstance Win32_BIOS).SerialNumber.Trim()
 
-# Change name to VID-PC Serial number
+# Change name to CUSTOMER_PREFIX-PC Serial number
 $NewName = "$CUSTOMER_NAME-$Serial"
 $NewName = $NewName.Substring(0, [Math]::Min(15, $NewName.Length))
 
@@ -399,7 +399,7 @@ if ($env:COMPUTERNAME -ne $NewName) {
 }
 ```
 
-**Block explanation:** The first block defines the prefix (`VID-PC` is an example). The second obtains the BIOS serial. The third forms the desired name, limits its length to 15 characters and renames only if necessary.
+**Block explanation:** The first block defines the customer-specific prefix (`CUSTOMER_PREFIX-PC` is a placeholder to replace). The second obtains the BIOS serial. The third forms the desired name, limits its length to 15 characters and renames only if necessary.
 
 Run the script in **SYSTEM** context (**Run using logged-on credentials = No**) and **64-bit PowerShell**. Deploy it after enrollment, not as an OOBE-required device preparation script.
 
