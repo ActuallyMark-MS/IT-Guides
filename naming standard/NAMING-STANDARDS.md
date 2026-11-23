@@ -40,13 +40,14 @@ Both are Microsoft Entra security groups; the prefixes are **organizational conv
 **Generic examples:**
 
 ```text
+GRP-CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_Devices_INT
 DG_Intune_Compliance_Windows_Devices_DK
 DG_Entra_Identity_Users_INT
 SG_Intune_Applications_Office_Devices_Pilot
 SG_M365_Licensing_Users_Standard
 ```
 
-The middle segments can be adjusted for the actual service and function; the order remains consistent.
+**Order requirement:** `Devices` or `Users` is always the **second-to-last segment**, immediately before `AdditionalInfo` (such as `DK`, `INT` or `Pilot`). The middle segments can be adjusted for the actual service and function; the order remains consistent.
 
 ## 3. Policies, profiles and configuration objects
 
