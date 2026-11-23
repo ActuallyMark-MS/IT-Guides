@@ -1,8 +1,8 @@
 # Windows Autopilot v1 + v2: Danish and International Deployment
 
-**Last updated:** 2026-11-19  
-**Purpose:** Reusable Intune implementation guide for a hybrid Windows Autopilot setup.  
-**Status:** Documents decisions from the implementation discussion; verify outstanding items in a pilot before rolling out.
+**Last updated:** 2026-11-23  
+**Purpose:** Reusable Intune implementation guide for a hybrid Windows Autopilot setup, with a default international v1 profile and DK-specific override.  
+**Status:** Reusable implementation design; validate outstanding items in a pilot before rollout. **Replace `CUSTOMER-PREFIX` with an actual short customer code.** See [Naming Standards](../../standards/NAMING-STANDARDS.md).
 
 ## 1. Objective and architecture
 
@@ -10,9 +10,9 @@ Keep **classic Windows Autopilot (v1)** as the primary provisioning method for b
 
 | Scenario | Enrollment route | Result |
 | --- | --- | --- |
-| Classic-registered device, Group Tag `DK` | v1 `AP-W11-DK` | Danish OOBE |
-| Classic-registered device, Group Tag `INT` | v1 `AP-W11-INT` | International OOBE |
-| Unregistered device, eligible international user | v2 `AP-v2-INT` | Entra joined and Intune enrolled |
+| Classic-registered device, Group Tag `DK` | v1 `CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_DK` | Danish OOBE |
+| Classic-registered device, no Group Tag (default) | v1 `CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_Default` | International OOBE |
+| Unregistered device, eligible international user | v2 `CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT` | Entra joined and Intune enrolled |
 | Unregistered device, Danish user | No INT v2 assignment | Use the DK v1 registration process |
 
 **Important:** v2 is **not an automatic recovery** mechanism for a registered classic Autopilot device whose v1 deployment fails. Registered classic devices generally receive their v1 profile; unregistered devices can use v2 when a targeted user signs in and requirements are met. Newer v2 device association can affect precedence; the unassociated fallback workflow described here does not use it.
@@ -32,13 +32,13 @@ Follow these steps in order for a new tenant. For this existing customer, **reus
 6. Check **Devices → Enrollment → Enrollment restrictions**. If personally owned Windows devices are blocked, plan to upload **corporate identifiers** or use **device association** for v2 before the user starts OOBE. Otherwise v2 enrollment might be blocked.
 7. Check Windows Enrollment Status Page (ESP) is appropriately assigned for v1; v2 uses its own device preparation progress experience.
 
-### Step 2 — Create the classic DK and INT device groups
+### Step 2 — Create the DK device group and optional common classic group
 
 In [Entra admin center](https://entra.microsoft.com):
 
 1. Go to **Identity → Groups → All groups → New group**.
 2. Set **Group type = Security**.
-3. Enter **Group name = GRP-AP-DK**.
+3. Enter **Group name = DG_Intune_Autopilot_v1_Devices_DK**.
 4. Set **Membership type = Dynamic Device**.
 5. Open **Add dynamic query → Edit** (rule syntax editor) and enter:
 
@@ -47,13 +47,8 @@ In [Entra admin center](https://entra.microsoft.com):
 ~~~
 
 6. Save the rule and create the group.
-7. Repeat with **GRP-AP-INT** and this rule:
-
-~~~text
-(device.devicePhysicalIds -any (_ -eq "[OrderID]:INT"))
-~~~
-
-8. Optionally retain the shared **GRP-AP-Productions** dynamic device group with:
+7. **Do not create an INT dynamic device group just for deployment.** The international v1 profile is the default, targeted to **All devices**. An older `DG_Intune_Autopilot_v1_Devices_INT` group can be retained only if another device-specific policy still needs it.
+8. Optionally retain the shared **DG_Intune_Autopilot_v1_Devices_All** dynamic device group with:
 
 ~~~text
 (device.devicePhysicalIds -any (_ -startsWith "[ZTDid]"))
@@ -61,51 +56,51 @@ In [Entra admin center](https://entra.microsoft.com):
 
 9. Do **not** assign a competing classic deployment profile to the shared group. Assign common compliance/security profiles to suitable existing device groups instead.
 
-**How membership works:** In the classic Autopilot device list, Group Tag **DK** or **INT** maps to the matching **[OrderID]** property. This is separate from Entra **Device categories** and from an Intune **Scope tag**.
+**How membership works:** In classic Autopilot, Group Tag **DK** maps to `[OrderID]:DK` and adds that device to the DK dynamic group. The default INT profile does **not** require an INT Group Tag. This is separate from Entra **Device categories** and from an Intune **Scope tag**.
 
 ### Step 3 — Create / verify classic Autopilot deployment profiles
 
 In [Intune](https://intune.microsoft.com):
 
 1. Go to **Devices → Windows → Enrollment → Deployment profiles** under **Windows Autopilot**.
-2. Choose **Create profile → Windows PC**. If **AP-W11-DK** already exists, open it and choose **Settings** to edit OOBE values instead.
-3. Enter **Name = AP-W11-DK**.
-4. Set **Convert all targeted devices to Autopilot = No** for the ordinary DK profile (conversion is handled separately for the INT fallback).
+2. Choose **Create profile → Windows PC**. If **CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_DK** already exists, open it and choose **Settings** to edit OOBE values instead.
+3. Enter **Name = CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_DK**.
+4. Set **Convert all targeted devices to Autopilot = No** on both DK and the All devices default profile. In particular, do **not** enable conversion on the All devices default or it could register unrelated corporate Intune devices.
 5. In **Out-of-box experience**, set:
 
-| Setting | AP-W11-DK |
+| Setting | CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_DK |
 | --- | --- |
 | Deployment mode | User-driven |
 | Join to Microsoft Entra ID as | Microsoft Entra joined |
 | User account type | Standard |
 | Language (Region) | Danish (Denmark) |
 | Automatically configure keyboard | Yes |
-| Apply device name template | **Yes → DK-%SERIAL%** |
+| Apply device name template | **Yes → CUSTOMER-PREFIX-%SERIAL%** |
 | Microsoft Software License Terms | Hide |
 | Privacy settings | Hide |
 | Hide change account options | Hide (requires Entra company branding) |
 
-6. On **Assignments**, choose **Selected groups → Select groups to include → GRP-AP-DK**. Review and create/save.
-7. Create or edit **AP-W11-INT** with these differences:
+6. On **Assignments**, choose **Selected groups → Select groups to include → DG_Intune_Autopilot_v1_Devices_DK**. Review and create/save. This specific group assignment overrides the default All devices profile for DK devices.
+7. Create or edit **CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_Default** with these differences:
 
-| Setting | AP-W11-INT |
+| Setting | CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_Default |
 | --- | --- |
 | Language (Region) | Operating system default |
 | Automatically configure keyboard | No |
-| Apply device name template | **Yes → INT-%SERIAL%** |
-| Assignment | **GRP-AP-INT**, not GRP-AP-DK |
+| Apply device name template | **Yes → CUSTOMER-PREFIX-%SERIAL%** |
+| Assignment | **All devices** (default); do not require Group Tag INT |
 
 8. Keep the other deployment settings aligned with the DK profile unless your customer requires differences.
-9. Check that the two classic deployment profiles do **not** target the same device. Before deploying a machine, verify its **Profile status = Assigned** under **Windows Autopilot → Devices**.
+9. **DK devices are deliberately targeted by both profiles:** the DK profile via the specific dynamic group and the international default via All devices. The specifically assigned DK profile should win; confirm the actual assigned profile on a pilot DK computer before OOBE. Avoid any *additional* overlapping specifically targeted classic profiles.
 
 **Important:** Windows computer names can be up to 15 characters long. Test serial lengths for the actual Lenovo models. Native v1 naming and post-enrollment v2 truncation may not behave identically for unusually long serials.
 
 ### Step 4 — Register a device for classic v1
 
 **Supplier/OEM method (preferred for preregistration):**
-1. Ask the supplier to register the device for the correct tenant and provide/assign Group Tag **DK** or **INT** when supported.
+1. Ask the supplier to register the device for the correct tenant. Request **Group Tag DK** only for Danish computers; international computers use the default profile without a tag.
 2. In **Intune → Devices → Windows → Enrollment → Devices** (under Windows Autopilot), check that the serial appears.
-3. If the supplier didn't set a Group Tag, select the device, edit **Group tag**, and enter **DK** or **INT**.
+3. For a **Danish** device, select the device, edit **Group tag** and enter **DK**. Leave the group tag unset for the default international profile.
 4. Wait for dynamic membership and the appropriate deployment profile to reach **Assigned**.
 
 **Manual hardware hash method when supplier cannot register it:**
@@ -122,7 +117,7 @@ Get-WindowsAutoPilotInfo.ps1 -OutputFile "D:\Autopilot.csv"
 
 5. On an admin PC, open **Intune → Devices → Windows → Enrollment → Devices → Import** under Windows Autopilot.
 6. Upload **Autopilot.csv**, wait for import, and use **Sync/Refresh** if necessary.
-7. Set **Group Tag = DK** or **INT**; wait for matching group membership and **Profile status = Assigned**.
+7. For **DK** hardware, set **Group Tag = DK** and wait for the DK dynamic group and DK profile to apply. For **INT** hardware, leave the group tag blank; confirm the **Default** classic profile is assigned.
 8. Only then hand the computer to the end user for v1 OOBE. If already partway through OOBE, return to a clean OOBE state as needed.
 
 **Do not use -Partner** in the import command for direct Intune registration. In OOBE, a PowerShell execution-policy bypass may be necessary; it does not override centrally enforced policy.
@@ -132,7 +127,7 @@ Get-WindowsAutoPilotInfo.ps1 -OutputFile "D:\Autopilot.csv"
 In [Entra admin center](https://entra.microsoft.com):
 
 1. Navigate to **Identity → Groups → All groups → New group**.
-2. Choose **Security**, name **GRP-AP-v2-INT-Users** (or reuse the international user group already created).
+2. Choose **Security**, name **GRP-CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT-Users** (or reuse the international user group already created).
 3. Set **Membership type = Dynamic User** and open the advanced rule editor.
 4. Paste:
 
@@ -153,7 +148,7 @@ In [Entra admin center](https://entra.microsoft.com):
 
 In **Entra admin center → Identity → Groups → All groups → New group**:
 
-1. Enter **Group name = GRP-AP-v2-INT-Devices**.
+1. Enter **Group name = GRP-CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT-Devices**.
 2. Set **Group type = Security** and **Membership type = Assigned**.
 3. Set **Microsoft Entra roles can be assigned to the group = No**.
 4. On **Owners**, choose **Add owners** and search **Intune Provisioning Client**.
@@ -167,14 +162,14 @@ Reference: [Microsoft — Create assigned device group](https://learn.microsoft.
 
 ### Step 7 — Assign apps and prepare the v2 device preparation policy
 
-**Required app targeting:** First assign critical apps as **Required** to **GRP-AP-v2-INT-Devices** in **Intune → Apps → All apps → [App] → Properties → Assignments**. Choose system-context installation where applicable. Keep the preparation-stage list short.
+**Required app targeting:** First assign critical apps as **Required** to **GRP-CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT-Devices** in **Intune → Apps → All apps → [App] → Properties → Assignments**. Choose system-context installation where applicable. Keep the preparation-stage list short.
 
 Now create the v2 policy:
 
 1. Open **Intune → Devices → Windows → Enrollment → Device preparation policies**.
 2. Select **Create → User Driven**.
-3. **Basics:** enter **Name = AP-v2-INT**, then **Next**.
-4. **Device group:** choose **GRP-AP-v2-INT-Devices** (this is the *device* group, not the users group).
+3. **Basics:** enter **Name = CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT**, then **Next**.
+4. **Device group:** choose **GRP-CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT-Devices** (this is the *device* group, not the users group).
 5. **Configuration settings → Deployment settings:**
    - **Deployment mode = User-driven**
    - **Deployment type = Single user**
@@ -198,7 +193,7 @@ Now create the v2 policy:
 7. **Applications:** add only the critical, already-assigned required apps you want tracked during device preparation.
 8. **Scripts:** select only scripts that must finish *during OOBE*. **Do not add the post-enrollment computer rename script here**.
 9. **Scope tags:** retain Default unless RBAC requires a custom scope tag.
-10. **Assignments:** select **GRP-AP-v2-INT-Users** (**user** group, not devices group).
+10. **Assignments:** select **GRP-CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT-Users** (**user** group, not devices group).
 11. Select **Review + create → Save**. Confirm the policy shows in **Device preparation policies**.
 
 **Selection logic:** An INT user with a classic-registered, assigned v1 PC receives its v1 profile. An eligible INT user on a PC without classic registration can receive v2 when they sign in. **This is not a fallback for a v1 deployment that has already failed.**
@@ -207,11 +202,12 @@ Now create the v2 policy:
 
 V1 supports its own naming template. Standard unassociated v2 does not apply the name template during OOBE; rename the computer after its Intune enrollment.
 
-1. Save this as **Rename-INT-Serial.ps1** on your admin computer:
+1. Save this as **Rename-Customer-Serial.ps1** on your admin computer, and replace the placeholder with a **short, real customer prefix**:
 
 ~~~powershell
 $Serial = (Get-CimInstance Win32_BIOS).SerialNumber.Trim()
-$NewName = "INT-$Serial"
+$CustomerPrefix = "ABC" # Replace with actual short customer prefix
+$NewName = "$CustomerPrefix-$Serial"
 
 # Windows computer names must be <=15 characters.
 $NewName = $NewName.Substring(0, [Math]::Min(15, $NewName.Length))
@@ -222,13 +218,13 @@ if ($env:COMPUTERNAME -ne $NewName) {
 ~~~
 
 2. Open **Intune → Devices → Scripts and remediations → Platform scripts → Add → Windows 10 and later**.
-3. Name it **AP-v2-INT-Rename-Serial** and upload **Rename-INT-Serial.ps1**.
+3. Name it **CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT-Rename-Serial** and upload **Rename-Customer-Serial.ps1**.
 4. Set **Run this script using the logged-on credentials = No**.
 5. Set **Run script in 64-bit PowerShell host = Yes**.
-6. On **Assignments**, target **GRP-AP-v2-INT-Devices**. Review/create.
+6. On **Assignments**, target **GRP-CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT-Devices**. Review/create.
 7. Verify execution under the script's **Device status** or the device's script reporting after enrollment.
 
-**No forced restart:** The script intentionally does not call Restart-Computer. The computer will use its new name after its next normal reboot. The -Force on Rename-Computer suppresses prompts; it does not reboot. For serials longer than 11 characters, the total 15-character limit truncates the name and might create a collision—test your models.
+**No forced restart:** The script intentionally does not call Restart-Computer. The computer will use its new name after its next normal reboot. The -Force on Rename-Computer suppresses prompts; it does not reboot. The complete name must be at most 15 characters. The example truncates overlong names, which can create collisions; adopt a collision-safe scheme for models with long serials.
 
 ### Step 9 — Optionally register v2 machines in classic Autopilot automatically
 
@@ -236,17 +232,17 @@ This section implements the requested **v2 first deployment → classic v1 regis
 
 1. Open **Intune → Devices → Windows → Enrollment → Deployment profiles** under **Windows Autopilot**.
 2. Select **Create profile → Windows PC**.
-3. Enter **Name = AP-v1-INT-Conversion**.
+3. Enter **Name = CUSTOMER-PREFIX_Autopilot_v1_conversion_deployment_profile_INT**.
 4. On **Basics**, set **Convert all targeted devices to Autopilot = Yes**.
 5. Set **Deployment mode = User-driven**, **Join type = Microsoft Entra joined**, **User account type = Standard**.
-6. Set **Language (Region) = Operating system default**, **Automatically configure keyboard = No** and **Apply device name template = Yes → INT-%SERIAL%**.
-7. Configure remaining OOBE options to match **AP-W11-INT**.
-8. On **Assignments**, include **GRP-AP-v2-INT-Devices** only; don't overlap classic-registered **GRP-AP-INT**.
+6. Set **Language (Region) = Operating system default**, **Automatically configure keyboard = No** and **Apply device name template = Yes → CUSTOMER-PREFIX-%SERIAL%**.
+7. Configure remaining OOBE options to match **CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_Default**.
+8. On **Assignments**, include **GRP-CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT-Devices** only; don't overlap classic-registered **DG_Intune_Autopilot_v1_Devices_INT**.
 9. Create the profile. After a v2 enrollment, check **Intune → Devices → Windows → Windows devices → [Device]** and verify **Ownership = Corporate**.
 10. Eligible corporate-owned Intune devices can be registered in classic Autopilot automatically. Allow up to **48 hours** and check **Windows → Enrollment → Windows Autopilot → Devices** for the device and profile assignment.
 11. Test a **subsequent reset** of a pilot device to verify the classic profile takes over correctly.
 
-**Do not assume automatic Group Tag assignment.** Conversion does **not** add **Group Tag INT**, so the converted device won't automatically enter **GRP-AP-INT**. It can use the dedicated conversion profile via **GRP-AP-v2-INT-Devices**. Applying the Group Tag automatically would require an extra Microsoft Graph workflow that is **not part of this guide**.
+**Do not assume automatic Group Tag assignment.** Conversion does **not** add **Group Tag INT**, so the converted device won't automatically enter **DG_Intune_Autopilot_v1_Devices_INT**. It can use the dedicated conversion profile via **GRP-CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT-Devices**. Applying the Group Tag automatically would require an extra Microsoft Graph workflow that is **not part of this guide**.
 
 Also, a device classified as **Personal** won't be registered via this conversion setting. Confirm ownership/identification in the pilot.
 
@@ -254,9 +250,9 @@ Also, a device classified as **Personal** won't be registered via this conversio
 
 | Pilot | Before OOBE | Expected initial result | After deployment |
 | --- | --- | --- | --- |
-| DK-v1 | Classic registered, Group Tag DK | AP-W11-DK | Device name **DK-<serial>** |
-| INT-v1 | Classic registered, Group Tag INT | AP-W11-INT | Device name **INT-<serial>** |
-| INT-v2 | **Not** classic registered; eligible INT user | AP-v2-INT | Post-enrollment rename to **INT-<serial>**, then optional v1 auto-registration |
+| DK-v1 | Classic registered, Group Tag DK | CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_DK (specific assignment wins) | Device name **<CUSTOMER-PREFIX>-<serial>** |
+| INT-v1 | Classic registered, **no Group Tag** | CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_Default (All devices) | Device name **<CUSTOMER-PREFIX>-<serial>** |
+| INT-v2 | **Not** classic registered; eligible INT user | CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT | Post-enrollment rename to **<CUSTOMER-PREFIX>-<serial>**, then optional v1 auto-registration |
 
 For each pilot:
 
@@ -271,11 +267,11 @@ For each pilot:
 
 | Group | Group type | Usage |
 | --- | --- | --- |
-| `GRP-AP-DK` | Dynamic device | Classic DK devices |
-| `GRP-AP-INT` | Dynamic device | Classic INT devices |
-| `GRP-AP-Productions` | Dynamic device | Shared classic Autopilot registered devices |
-| `GRP-AP-v2-INT-Users` (example) | Dynamic user | Assignment target for v2 policy |
-| `GRP-AP-v2-INT-Devices` | **Assigned** security group | Empty initially; v2 adds enrolled devices |
+| `DG_Intune_Autopilot_v1_Devices_DK` | Dynamic device | Classic DK devices |
+| `DG_Intune_Autopilot_v1_Devices_INT` | Optional legacy dynamic device | Not required for the All devices default INT deployment |
+| `DG_Intune_Autopilot_v1_Devices_All` | Optional dynamic device | Shared classic Autopilot registered devices; **not needed** for assigning the default profile |
+| `GRP-CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT-Users` (example) | Dynamic user | Assignment target for v2 policy |
+| `GRP-CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT-Devices` | **Assigned** security group | Empty initially; v2 adds enrolled devices |
 
 ### Classic device dynamic rules
 
@@ -285,7 +281,7 @@ DK:
 (device.devicePhysicalIds -any (_ -eq "[OrderID]:DK"))
 ```
 
-INT:
+INT (optional legacy device group only, not required for deployment):
 
 ```text
 (device.devicePhysicalIds -any (_ -eq "[OrderID]:INT"))
@@ -326,12 +322,12 @@ Maintain both existing profiles:
 
 | Profile | Assigned group | OOBE region/language | Auto keyboard | Device name |
 | --- | --- | --- | --- | --- |
-| `AP-W11-DK` | `GRP-AP-DK` | Danish (Denmark) | Yes | `DK-%SERIAL%` |
-| `AP-W11-INT` | `GRP-AP-INT` | Operating system default/user-selected | No | `INT-%SERIAL%` |
+| `CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_DK` | `DG_Intune_Autopilot_v1_Devices_DK` | Danish (Denmark) | Yes | `CUSTOMER-PREFIX-%SERIAL%` |
+| `CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_Default` | **All devices** | Operating system default/user-selected | No | `CUSTOMER-PREFIX-%SERIAL%` |
 
 These are user-driven Microsoft Entra joined deployments.
 
-**Avoid overlapping classic deployment profile assignments.** Use `GRP-AP-Productions` for common management where useful, but do not assign a competing classic Autopilot profile through it.
+**Intended precedence:** the DK profile is specifically assigned to `DG_Intune_Autopilot_v1_Devices_DK`, and the international default is assigned to **All devices**. The DK assignment takes precedence. Avoid additional overlapping specific profiles except the carefully tested v2 conversion profile.
 
 ### Classic manual hardware-hash registration
 
@@ -347,7 +343,7 @@ Verify that `D:\` is really the USB drive; it is not guaranteed on every PC. Scr
 
 **Do not specify `-Partner`** for standard Intune classic Autopilot import. The `-Partner` export is intended for Partner Center.
 
-In Intune: **Devices → Windows → Enrollment → Windows Autopilot devices → Import**, upload CSV, refresh, set Group Tag `DK` or `INT`, then verify the right profile is **Assigned**.
+In Intune: **Devices → Windows → Enrollment → Windows Autopilot devices → Import**, upload CSV and refresh. Set Group Tag **DK only for Danish devices**; international computers receive the **All devices** default profile without a tag. Verify the actual assigned profile.
 
 ### Partner Center lesson learned
 
@@ -355,14 +351,14 @@ Partner Center registration using manufacturer/model/serial can fail unless prer
 
 ## 4. Autopilot v2 configuration: international fallback
 
-Intune → **Devices → Windows → Enrollment → Device preparation policies** → Create `AP-v2-INT`.
+Intune → **Devices → Windows → Enrollment → Device preparation policies** → Create `CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT`.
 
 | Configuration | Selection |
 | --- | --- |
 | Join type / mode | **User-driven Microsoft Entra join** |
 | User account type | **Standard** |
 | **Assignment** | Dynamic international **user** group |
-| **Device group** | `GRP-AP-v2-INT-Devices` (Assigned; initially empty) |
+| **Device group** | `GRP-CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT-Devices` (Assigned; initially empty) |
 | Installation timeout | 60 minutes (chosen for this configuration) |
 | Allow skip after repeated failures | No (chosen for mandatory provisioning) |
 | Diagnostics link | Yes |
@@ -383,48 +379,45 @@ Select only required applications and scripts for the **device preparation stage
 
 Native feature: **Convert all targeted devices to Autopilot = Yes** on a classic Autopilot deployment profile. This registers eligible, **corporate-owned** Intune-managed devices automatically; Microsoft advises allowing up to 48 hours.
 
-Because `GRP-AP-INT` relies on a pre-existing **Group Tag** `INT`, a v2-only PC will **not** automatically join that tag-based group.
+The main international v1 profile is assigned to **All devices**, so it doesn't depend on Group Tag `INT`. To keep automatic conversion scoped specifically to v2 fallback devices, use the separate conversion profile assigned to the v2 device group and verify actual classic profile precedence in the pilot.
 
 ### Recommended conversion approach
 
-1. Keep `AP-W11-INT` and `GRP-AP-INT` for originally registered INT devices.
-2. Create a dedicated **classic** profile named `AP-v1-INT-Conversion`, matching the international OOBE and `INT-%SERIAL%` naming configuration.
+1. Keep `CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_Default` assigned to **All devices** for originally registered INT devices. No `INT` Group Tag is needed.
+2. Create a dedicated **classic** profile named `CUSTOMER-PREFIX_Autopilot_v1_conversion_deployment_profile_INT`, matching the international OOBE and `CUSTOMER-PREFIX-%SERIAL%` naming configuration.
 3. Set **Convert all targeted devices to Autopilot = Yes**.
-4. Assign this classic conversion profile to `GRP-AP-v2-INT-Devices`.
+4. Assign this classic conversion profile to `GRP-CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT-Devices`.
 5. Verify the v2-enrolled devices are classified **corporate-owned**. If not, correct the enrollment identification/ownership route before relying on automatic registration.
 6. Allow conversion and verify each device appears under **Windows Autopilot devices**, with appropriate classic profile assignment.
 
 **Important limitations:**
 - Conversion is **registration**, not a fresh OOBE run, and it does not immediately replace the running Windows installation.
-- **No Group Tag `INT` is automatically assigned.** Devices registered by conversion remain in the v2 group and use the conversion profile for subsequent classic deployment, assuming their group targeting remains applicable.
-- If the business explicitly requires converted devices to be members of `GRP-AP-INT`, implement and test separate **Microsoft Graph** automation to apply Group Tag `INT` after classic registration. This was discussed but **not implemented**.
+- **No Group Tag `INT` is automatically assigned.** The separately targeted conversion profile can be used for subsequent classic deployment, provided membership and precedence are validated against the All devices default.
+- If an extra `INT`-tag device group is required for unrelated policy assignments, it needs separate tag automation. It is **not required** for the default international v1 deployment. This was discussed but **not implemented**.
 - Pilot this configuration before production. Verify that targeting and policy precedence remain correct after reset and throughout group membership changes.
 
-## 6. Consistent DK and INT serial-based naming
+## 6. Consistent customer-prefix serial-based naming
 
 ### Classic v1
 
-Set `DK-%SERIAL%` for `AP-W11-DK` and `INT-%SERIAL%` for `AP-W11-INT`:
+Use the **same template** for DK and international classic v1 profiles after replacing the placeholder with a short customer code:
 
 ~~~text
-DK-%SERIAL%
+CUSTOMER-PREFIX-%SERIAL%
 ~~~
 
-International template:
-
-```text
-INT-%SERIAL%
-```
+The placeholder `CUSTOMER-PREFIX` must be replaced before implementation; it is **not** intended literally.
 
 ### Unassociated v2 fallback
 
 The v2 device naming template requires **device association** to rename within OOBE. For devices using v2 *without* preregistration/association, leave the v2 template disabled and rename after enrollment.
 
-Intune platform script (PowerShell), targeted to **`GRP-AP-v2-INT-Devices`**:
+Intune platform script (PowerShell), targeted to **`GRP-CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT-Devices`**:
 
 ```powershell
 $Serial = (Get-CimInstance Win32_BIOS).SerialNumber.Trim()
-$NewName = "INT-$Serial"
+$CustomerPrefix = "ABC" # Replace with actual short customer prefix
+$NewName = "$CustomerPrefix-$Serial"
 
 # Windows computer names are limited to 15 characters.
 $NewName = $NewName.Substring(0, [Math]::Min(15, $NewName.Length))
@@ -442,24 +435,24 @@ Intune → **Devices → Scripts and remediations → Platform scripts**:
 
 **No forced restart:** `Rename-Computer -Force` does **not** force a reboot. The new name becomes fully effective on the **next normal restart**. Do not add `Restart-Computer -Force` unless operations explicitly require an immediate reboot. Intune/Entra name displays may update after a later restart/check-in.
 
-**Serial-number caveat:** Truncation may cause duplicate names if long serial numbers share the first 11 characters after the `INT-` prefix. Test across hardware models and choose a collision-resistant strategy if needed. PowerShell interpolates `"INT-$Serial"`; single quotes would not expand `$Serial`.
+**Serial-number caveat:** Truncation may cause duplicate names if long serial numbers share a leading sequence. Test across hardware models and choose a collision-resistant strategy if needed. PowerShell interpolates `"$CustomerPrefix-$Serial"`; single quotes would not expand the variables.
 
 ## 7. Operational verification and monitoring
 
 ### After v1 registration
 
 1. Device appears in **Windows Autopilot devices**.
-2. Group Tag is `DK` or `INT`.
-3. Device is in the corresponding dynamic group.
-4. Correct `AP-W11-DK` or `AP-W11-INT` profile is assigned.
+2. Group Tag is `DK` for Danish; INT devices need no Group Tag.
+3. DK devices are in the DK dynamic group.
+4. Correct `CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_DK` or `CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_Default` profile is assigned.
 5. Complete OOBE, verify apps/security controls.
 
 ### After v2 enrollment
 
 1. Device shows in **Intune Windows devices** and **Entra ID devices**.
-2. Device is a member of `GRP-AP-v2-INT-Devices`.
+2. Device is a member of `GRP-CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT-Devices`.
 3. Deployment reports show the v2 provisioning results.
-4. Post-enrollment script stages `INT-<serial>` rename; check after next normal reboot.
+4. Post-enrollment script stages `<CUSTOMER-PREFIX>-<serial>` rename; check after next normal reboot.
 5. Device ownership is **Corporate** if relying on automatic v1 conversion.
 6. Within the Microsoft-documented registration window, confirm classic Autopilot registration and assignment of the **conversion profile**.
 7. Test a later reset on a pilot to validate classic profile behavior.
@@ -474,15 +467,15 @@ Intune → **Devices → Scripts and remediations → Platform scripts**:
 | Unregistered INT PC does not receive v2 | User group membership, Windows OOBE version, enrollment eligibility, personal-device blocking, licensing |
 | Registered v1 PC does not use v2 | Normal behavior: classic registration/profile takes precedence in standard setup |
 | v2 device does not auto-register in v1 | Corporate ownership, classic conversion profile targeting, group membership, elapsed sync time |
-| v2 device is missing from `GRP-AP-INT` | No Group Tag is assigned automatically on v2-to-v1 conversion |
+| v2 device is missing from `DG_Intune_Autopilot_v1_Devices_INT` | No Group Tag is assigned automatically on v2-to-v1 conversion |
 | Serial rename does not display yet | Restart needed for name to take full effect; verify script result and check-in |
 | `Install-Script` says script execution disabled | Process-scoped execution-policy bypass (if not centrally enforced) |
 | Partner Center registration returns `ZtdDeviceNotFound` | Vendor/supplier registration prerequisites; fall back to classic hardware hash or v2 |
 
 ## 9. Production checklist
 
-- [ ] Existing `AP-W11-DK` and `AP-W11-INT` remain assigned to their own Group Tag groups; naming is `DK-%SERIAL%` and `INT-%SERIAL%` respectively.
-- [ ] No overlapping classic Autopilot profile assignments.
+- [ ] DK profile assigned to the DK dynamic group; international default assigned to **All devices**. Both use `CUSTOMER-PREFIX-%SERIAL%` with a valid short customer prefix.
+- [ ] Classic profile precedence tested: DK group wins over All devices; v2 conversion targeting checked separately.
 - [ ] Dynamic INT user rule has been validated using representative users.
 - [ ] v2 device group is Assigned, initially empty, and service principal is an owner.
 - [ ] v2 policy targets **only** international users.
@@ -490,7 +483,7 @@ Intune → **Devices → Scripts and remediations → Platform scripts**:
 - [ ] Required apps, baseline policies, and security controls are assigned correctly to v2 devices.
 - [ ] Post-enrollment rename script validated with no forced restart.
 - [ ] Corporate device ownership validated for conversion.
-- [ ] `AP-v1-INT-Conversion` profile piloted, including future reset.
+- [ ] `CUSTOMER-PREFIX_Autopilot_v1_conversion_deployment_profile_INT` profile piloted, including future reset.
 - [ ] Report and document exceptions, failures and device-name collisions.
 
 ## References
