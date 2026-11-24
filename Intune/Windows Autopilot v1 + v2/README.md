@@ -428,15 +428,15 @@ There is **no forced restart**. The rename becomes fully active after the next n
 ## 9. Production checklist
 
 - [ ] DK profile assigned to the DK dynamic group; international default assigned to **All devices**. Both use `CUSTOMER-PREFIX-%SERIAL%` with a valid short customer prefix.
-- [x] Classic profile precedence **pilot verified**: DK wins over All devices, and converted INT v2 PC received intended classic profile.
+- [ ] Classic profile precedence **pilot verified**: DK wins over All devices, and converted INT v2 PC received intended classic profile.
 - [ ] Dynamic INT user rule has been validated using representative users.
 - [ ] v2 device group is Assigned, initially empty, and service principal is an owner.
 - [ ] v2 policy targets **only** international users.
 - [ ] Device enrollment restrictions allow intended fallback hardware.
 - [ ] Required apps, baseline policies, and security controls are assigned correctly to v2 devices.
-- [x] v2 post-enrollment rename script **pilot verified**; name took effect after normal restart.
+- [ ] v2 post-enrollment rename script **pilot verified**; name took effect after normal restart.
 - [ ] Corporate device ownership validated for conversion.
-- [x] v2 automatic v1 registration and subsequent **full Wipe → v1 OOBE** **pilot verified**; correct profile, name and configuration.
+- [ ] v2 automatic v1 registration and subsequent **full Wipe → v1 OOBE** **pilot verified**; correct profile, name and configuration.
 - [ ] Report and document exceptions, failures and device-name collisions.
 
 ## References
