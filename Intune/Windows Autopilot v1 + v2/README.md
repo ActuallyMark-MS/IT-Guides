@@ -251,58 +251,6 @@ if ($env:COMPUTERNAME -ne $NewName) {
 
 Microsoft references: [Windows Autopilot profile assignment](https://learn.microsoft.com/en-us/autopilot/profiles) and [device groups / automatic conversion](https://learn.microsoft.com/en-us/autopilot/enrollment-autopilot).
 
-### Step 10 — Verified pilot results and repeatable acceptance tests
-
-**Test status: 16/16 checks passed (user-reported, 24 November 2026).** The results below describe what was tested in this environment. They do not replace validation in other tenants or on different hardware.
-
-#### A. Danish PC — classic Autopilot v1 (4/4 passed)
-
-- [x] Received the Danish v1 profile instead of the default international profile.
-- [x] Windows OOBE used Danish language and keyboard.
-- [x] Computer followed the configured `CUSTOMER-PREFIX-%SERIAL%` naming convention.
-- [x] Required applications and security policies applied.
-
-**Test setup:** Classic Autopilot registration with **Group Tag DK**. The DK-specific device-group assignment correctly took priority over the All devices default profile.
-
-#### B. International PC — classic Autopilot v1 (4/4 passed)
-
-- [x] Received the international default v1 profile assigned to **All devices**.
-- [x] User could select language and keyboard during OOBE.
-- [x] Computer followed the `CUSTOMER-PREFIX-%SERIAL%` naming convention.
-- [x] Required applications and security policies applied.
-
-**Test setup:** Classic Autopilot-registered PC **without a Group Tag**.
-
-#### C. International PC — Autopilot v2 fallback (5/5 passed)
-
-- [x] Automatically received the v2 device preparation policy.
-- [x] Appeared in the assigned v2 device group.
-- [x] Post-enrollment PowerShell naming took effect after a normal restart.
-- [x] Automatically registered in the classic Autopilot v1 device inventory.
-- [x] The intended classic v1 profile was assigned after conversion.
-
-**Test setup:** A PC **not registered in classic Autopilot before enrollment**, enrolled by an eligible international user.
-
-**Significance:** Classic Autopilot registration was observed without requiring a reset. Registration/profile assignment is not the same as executing a fresh v1 OOBE.
-
-#### D. Converted v2 PC — subsequent full Wipe (3/3 passed)
-
-- [x] Entered classic Autopilot v1 OOBE after **Wipe**.
-- [x] Received the correct international v1 deployment profile.
-- [x] Followed the naming convention and received the required configuration.
-
-**Significance:** The full **v2 initial enrollment → automatic classic registration → Wipe → v1 deployment** sequence was successfully tested. **Wipe is destructive** and should be tested on a spare or otherwise prepared device.
-
-#### Reuse in another customer environment
-
-1. Validate group membership and the actual assigned deployment profile before OOBE.
-2. Repeat the DK v1 and untagged INT v1 tests.
-3. Repeat the international v2 setup, post-enrollment rename and automatic classic registration checks.
-4. On a prepared test device, confirm the full Wipe → classic v1 experience.
-5. Record device ownership and serial naming edge cases separately. These details were **not individually established by the 16 pass/fail checks**.
-6. Document any tenant-specific exceptions before production rollout.
-
-
 ## 2. Group design
 
 | Group | Membership | Usage |
