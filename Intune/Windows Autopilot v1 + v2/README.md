@@ -1,8 +1,8 @@
 # Windows Autopilot v1 + v2: Danish and International Deployment
 
-**Last updated:** 2026-11-23  
+**Last updated:** 2026-11-24  
 **Purpose:** Reusable Intune implementation guide for a hybrid Windows Autopilot setup, with a default international v1 profile and DK-specific override.  
-**Status:** Reusable implementation design; validate outstanding items in a pilot before rollout. **Replace `CUSTOMER-PREFIX` with an actual short customer code.** See [Naming Standards](../../naming%20standard/NAMING-STANDARDS.md).
+**Status:** All 16 reported functional pilot checks passed across DK v1, INT v1, INT v2 and v2-to-v1 post-Wipe deployment. Results are user-reported from the tested environment; repeat acceptance testing for other tenants or hardware models. **Replace `CUSTOMER-PREFIX` with an actual short customer code.** See [Naming Standards](../../naming%20standard/NAMING-STANDARDS.md).
 
 ## 1. Objective and architecture
 
@@ -233,7 +233,7 @@ if ($env:COMPUTERNAME -ne $NewName) {
 
 ### Step 9 — Automatically register v2-enrolled PCs in classic Autopilot
 
-**Purpose:** An international PC can use v2 for its first enrollment and become a **classic Autopilot-registered** device afterward, so later resets can use a classic deployment profile. This is a **planned configuration requiring pilot verification**, not a confirmed production result.
+**Purpose:** An international PC can use v2 for its first enrollment and become a **classic Autopilot-registered** device afterward, so later resets can use a classic deployment profile. **Pilot verified:** the international v2 device was automatically registered in classic Autopilot without an intervening reset, and after a subsequent full Wipe it entered classic v1 OOBE, received the correct international profile, naming and required configuration. These are results reported for the tested environment.
 
 1. In **Intune → Devices → Windows → Enrollment → Windows Autopilot → Deployment profiles**, choose **Create profile → Windows PC**.
 2. **Name:** `CUSTOMER-PREFIX_Autopilot_v1_conversion_deployment_profile_INT`.
@@ -251,22 +251,57 @@ if ($env:COMPUTERNAME -ne $NewName) {
 
 Microsoft references: [Windows Autopilot profile assignment](https://learn.microsoft.com/en-us/autopilot/profiles) and [device groups / automatic conversion](https://learn.microsoft.com/en-us/autopilot/enrollment-autopilot).
 
-### Step 10 — Test and validate the three expected flows
+### Step 10 — Verified pilot results and repeatable acceptance tests
 
-| Pilot | Before OOBE | Expected initial result | After deployment |
-| --- | --- | --- | --- |
-| DK-v1 | Classic registered, Group Tag DK | CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_DK (specific assignment wins) | Device name **<CUSTOMER-PREFIX>-<serial>** |
-| INT-v1 | Classic registered, **no Group Tag** | CUSTOMER-PREFIX_Autopilot_v1_deployment_profile_Default (All devices) | Device name **<CUSTOMER-PREFIX>-<serial>** |
-| INT-v2 | **Not** classic registered; eligible INT user | CUSTOMER-PREFIX_Autopilot_v2_deployment_profile_INT | Post-enrollment rename to **<CUSTOMER-PREFIX>-<serial>**, then optional v1 auto-registration |
+**Test status: 16/16 checks passed (user-reported, 24 November 2026).** The results below describe what was tested in this environment. They do not replace validation in other tenants or on different hardware.
 
-For each pilot:
+#### A. Danish PC — classic Autopilot v1 (4/4 passed)
 
-1. Check **Entra ID → Groups → [Target group] → Members**.
-2. On v1 devices: check **Intune → Windows → Enrollment → Windows Autopilot → Devices** shows **Profile status = Assigned**.
-3. On v2 devices: check **Intune → Devices → Windows → Windows devices** and **Windows Autopilot device preparation deployment reports**.
-4. Verify intended required apps, standard-user rights, Defender/security profiles and correct serial-based naming.
-5. For v2, perform a normal restart later, confirm the new computer name, then monitor corporate ownership and classic registration.
-6. Document failures before enabling production-scale enrollment.
+- [x] Received the Danish v1 profile instead of the default international profile.
+- [x] Windows OOBE used Danish language and keyboard.
+- [x] Computer followed the configured `CUSTOMER-PREFIX-%SERIAL%` naming convention.
+- [x] Required applications and security policies applied.
+
+**Test setup:** Classic Autopilot registration with **Group Tag DK**. The DK-specific device-group assignment correctly took priority over the All devices default profile.
+
+#### B. International PC — classic Autopilot v1 (4/4 passed)
+
+- [x] Received the international default v1 profile assigned to **All devices**.
+- [x] User could select language and keyboard during OOBE.
+- [x] Computer followed the `CUSTOMER-PREFIX-%SERIAL%` naming convention.
+- [x] Required applications and security policies applied.
+
+**Test setup:** Classic Autopilot-registered PC **without a Group Tag**.
+
+#### C. International PC — Autopilot v2 fallback (5/5 passed)
+
+- [x] Automatically received the v2 device preparation policy.
+- [x] Appeared in the assigned v2 device group.
+- [x] Post-enrollment PowerShell naming took effect after a normal restart.
+- [x] Automatically registered in the classic Autopilot v1 device inventory.
+- [x] The intended classic v1 profile was assigned after conversion.
+
+**Test setup:** A PC **not registered in classic Autopilot before enrollment**, enrolled by an eligible international user.
+
+**Significance:** Classic Autopilot registration was observed without requiring a reset. Registration/profile assignment is not the same as executing a fresh v1 OOBE.
+
+#### D. Converted v2 PC — subsequent full Wipe (3/3 passed)
+
+- [x] Entered classic Autopilot v1 OOBE after **Wipe**.
+- [x] Received the correct international v1 deployment profile.
+- [x] Followed the naming convention and received the required configuration.
+
+**Significance:** The full **v2 initial enrollment → automatic classic registration → Wipe → v1 deployment** sequence was successfully tested. **Wipe is destructive** and should be tested on a spare or otherwise prepared device.
+
+#### Reuse in another customer environment
+
+1. Validate group membership and the actual assigned deployment profile before OOBE.
+2. Repeat the DK v1 and untagged INT v1 tests.
+3. Repeat the international v2 setup, post-enrollment rename and automatic classic registration checks.
+4. On a prepared test device, confirm the full Wipe → classic v1 experience.
+5. Record device ownership and serial naming edge cases separately. These details were **not individually established by the 16 pass/fail checks**.
+6. Document any tenant-specific exceptions before production rollout.
+
 
 ## 2. Group design
 
@@ -365,7 +400,7 @@ The optional conversion profile `CUSTOMER-PREFIX_Autopilot_v1_conversion_deploym
 
 A v2-only device is managed in Intune and Entra ID but does **not** automatically appear in the classic Autopilot device inventory. Eligible **corporate-owned** devices can be registered in classic Autopilot using the conversion setting; allow up to **48 hours**.
 
-The default international profile targets **All devices**, but keep its conversion setting **No**. The separately assigned conversion profile is specifically targeted to v2-enrolled devices and must be tested for correct precedence. **This workflow requires no international Group Tag or dynamic device group.**
+The default international profile targets **All devices**, but keep its conversion setting **No**. The separately assigned conversion profile is specifically targeted to v2-enrolled devices. **Pilot result:** automatic classic registration, appropriate classic profile assignment and the subsequent full Wipe → classic v1 deployment were all reported successful. Recheck assignment and precedence in other environments. **This workflow requires no international Group Tag or dynamic device group.**
 
 ## 6. Consistent customer-prefix serial-based naming
 
@@ -445,15 +480,15 @@ There is **no forced restart**. The rename becomes fully active after the next n
 ## 9. Production checklist
 
 - [ ] DK profile assigned to the DK dynamic group; international default assigned to **All devices**. Both use `CUSTOMER-PREFIX-%SERIAL%` with a valid short customer prefix.
-- [ ] Classic profile precedence tested: DK group wins over All devices; v2 conversion targeting checked separately.
+- [x] Classic profile precedence **pilot verified**: DK wins over All devices, and converted INT v2 PC received intended classic profile.
 - [ ] Dynamic INT user rule has been validated using representative users.
 - [ ] v2 device group is Assigned, initially empty, and service principal is an owner.
 - [ ] v2 policy targets **only** international users.
 - [ ] Device enrollment restrictions allow intended fallback hardware.
 - [ ] Required apps, baseline policies, and security controls are assigned correctly to v2 devices.
-- [ ] Post-enrollment rename script validated with no forced restart.
+- [x] v2 post-enrollment rename script **pilot verified**; name took effect after normal restart.
 - [ ] Corporate device ownership validated for conversion.
-- [ ] `CUSTOMER-PREFIX_Autopilot_v1_conversion_deployment_profile_INT` profile piloted, including future reset.
+- [x] v2 automatic v1 registration and subsequent **full Wipe → v1 OOBE** **pilot verified**; correct profile, name and configuration.
 - [ ] Report and document exceptions, failures and device-name collisions.
 
 ## References
