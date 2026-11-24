@@ -204,7 +204,7 @@ Standard unassociated v2 deployments do not apply the built-in naming template d
 
 ~~~powershell
 # Predefined variables for naming standard for CUSTOMER_NAME
-$CUSTOMER_NAME = "CUSTOMER_PREFIX-PC"
+$CUSTOMER_NAME = "CUSTOMER_PREFIX"
 
 # Get the device serial number
 $Serial = (Get-CimInstance Win32_BIOS).SerialNumber.Trim()
